@@ -1,0 +1,88 @@
+# ==========================================
+# 1. Spring Boot & Build Tools
+# ==========================================
+HELP.md
+.gradle
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/main/**/build/
+!**/src/test/**/build/
+bin/
+!**/src/main/**/bin/
+!**/src/test/**/bin/
+
+# ==========================================
+# 2. macOS System Files
+# ==========================================
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.Spotlight-V100
+.Trashes
+*.icloud
+
+# ==========================================
+# 3. IntelliJ IDEA (공유 금지 설정 포함)
+# ==========================================
+.idea
+*.iws
+*.iml
+*.ipr
+out/
+!**/src/main/**/out/
+!**/src/test/**/out/
+
+# 인텔리제이 내부 개인화 설정
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/usage.xml
+.idea/dictionaries
+.idea/shelf/
+.idea/dataSources/
+.idea/dataSources.local.xml
+.idea/sqlDataSources.xml
+.idea/httpRequests/
+
+# ==========================================
+# 4. Security & Environment (보안 관련)
+# ==========================================
+# DB 비밀번호, API 키 등이 포함된 환경변수 파일
+.env
+.env.local
+.env.*.local
+*.properties
+# 중요: 만약 application.yml에 비번이 있다면 이건 예외로 빼거나 조심해야 함
+# application-local.yml 등 로컬 전용 설정 파일들
+**/src/main/resources/application-local.yml
+
+# ==========================================
+# 5. Logs & Temporary Files
+# ==========================================
+*.log
+logs/
+temp/
+tmp/
+
+# ==========================================
+# 6. Legacy IDEs (STS, NetBeans, VS Code)
+# ==========================================
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+
+### VS Code ###
+.vscode/
