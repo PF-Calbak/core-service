@@ -6,6 +6,7 @@ import static org.mockito.BDDMockito.given;
 import com.pathfinder.calbak.domain.entity.User;
 import com.pathfinder.calbak.domain.enums.Enums;
 import com.pathfinder.calbak.dto.UserAdditionalInfoRequest;
+import com.pathfinder.calbak.exception.DuplicateNicknameException;
 import com.pathfinder.calbak.repository.UserRepository;
 import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
@@ -44,7 +45,7 @@ class UserServiceTest {
     }
 
     @Test
-    @DisplayName("닉네임이 이미 존재하면 IllegalArgumentException을 던진다")
+    @DisplayName("닉네임이 이미 존재하면 DuplicateNicknameException을 던진다")
     void updateAdditionalInfo_DuplicateNickname() {
         // given
         User user = User.builder().email("test@test.com").nickname("기존유저").build();
@@ -58,7 +59,7 @@ class UserServiceTest {
 
         // when & then
         assertThatThrownBy(() -> userService.updateAdditionalInfo(request))
-            .isInstanceOf(IllegalArgumentException.class)
+            .isInstanceOf(DuplicateNicknameException.class)
             .hasMessage("이미 사용 중인 닉네임입니다.");
     }
 }

@@ -24,9 +24,16 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
     @Value("${jwt.access-token-expiry}")
     private long accessTokenExpiry;
 
+    @Value("${app.cookie.secure:false}")
+    private boolean cookieSecure;
+
     @Override
-    public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response,
-                                        Authentication authentication) throws IOException {
+    public void onAuthenticationSuccess(
+        HttpServletRequest request,
+        HttpServletResponse response,
+        Authentication authentication
+    ) throws IOException {
+
         OAuth2User oAuth2User = (OAuth2User) authentication.getPrincipal();
         String email = oAuth2User.getAttribute("email");
 
@@ -34,11 +41,9 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
         String token = jwtProvider.generateAccessToken(email);
 
         // HttpOnly 쿠키로 JWT 전달
-        // secure: HTTPS 환경에서만 전송 (운영 배포 시 true로 변경)
-        // sameSite=Lax: 외부 사이트에서의 요청에 쿠키 미전송 → CSRF 방어 보조
         ResponseCookie cookie = ResponseCookie.from("access_token", token)
             .httpOnly(true)
-            .secure(false)        // 운영 환경에서는 반드시 true로 변경 (HTTPS 필수)
+            .secure(cookieSecure)
             .path("/")
             .maxAge(accessTokenExpiry / 1000)
             .sameSite("Lax")

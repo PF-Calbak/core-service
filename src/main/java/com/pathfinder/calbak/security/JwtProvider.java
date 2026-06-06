@@ -5,9 +5,11 @@ import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import java.util.Date;
 import javax.crypto.SecretKey;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+@Slf4j
 @Component
 public class JwtProvider {
 
@@ -17,6 +19,7 @@ public class JwtProvider {
     public JwtProvider(
         @Value("${jwt.secret}") String secretKey,
         @Value("${jwt.access-token-expiry}") long accessTokenExpiry) {
+
         byte[] keyBytes = Decoders.BASE64.decode(secretKey);
         this.key = Keys.hmacShaKeyFor(keyBytes);
         this.accessTokenExpiry = accessTokenExpiry;
@@ -48,9 +51,15 @@ public class JwtProvider {
     // 토큰 서명 및 만료 여부 검증
     public boolean validateToken(String token) {
         try {
-            Jwts.parser().verifyWith(key).build().parseSignedClaims(token);
+            Jwts.parser()
+                .verifyWith(key)
+                .build()
+                .parseSignedClaims(token);
+
             return true;
+
         } catch (Exception e) {
+            log.warn("Invalid JWT token", e);
             return false;
         }
     }
