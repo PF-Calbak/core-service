@@ -123,6 +123,11 @@ class UserServiceTest {
         userService.updateAdditionalInfo(request);
 
         assertThat(user.getNickname()).isEqualTo("새닉네임");
+        assertThat(user.getGender()).isEqualTo(Enums.Gender.MALE);
+        assertThat(user.getAgeGroup()).isEqualTo(Enums.AgeGroup.AGE_20S);
+        assertThat(user.getJob()).isEqualTo("대학생");
+        assertThat(user.getUsagePurpose()).isEqualTo("수업관리");
+        assertThat(user.getNotificationSetting()).isEqualTo(Enums.NotificationSetting.MIN_30);
 
         verify(userRepository)
             .findByEmail("test@test.com");
