@@ -1,4 +1,3 @@
--- 1. users 테이블 (온보딩 필드 추가)
 CREATE TABLE users
 (
     id                   UUID PRIMARY KEY,
@@ -24,7 +23,6 @@ CREATE TABLE users
     deleted_by           UUID
 );
 
--- 2. categories 테이블
 CREATE TABLE categories
 (
     id         UUID PRIMARY KEY,
@@ -40,12 +38,12 @@ CREATE TABLE categories
     UNIQUE (user_id, name)
 );
 
--- 3. teams 테이블
 CREATE TABLE teams
 (
     id          UUID PRIMARY KEY,
     name        VARCHAR(100) NOT NULL,
-    invite_code VARCHAR(255),
+    description VARCHAR(255),
+    invite_code VARCHAR(255) NOT NULL UNIQUE,
     created_at  TIMESTAMP    NOT NULL,
     updated_at  TIMESTAMP,
     deleted_at  TIMESTAMP,
@@ -54,7 +52,6 @@ CREATE TABLE teams
     deleted_by  UUID
 );
 
--- 4. team_members 테이블
 CREATE TABLE team_members
 (
     id         UUID PRIMARY KEY,
@@ -70,7 +67,6 @@ CREATE TABLE team_members
     UNIQUE (team_id, user_id)
 );
 
--- 5. schedules 테이블
 CREATE TABLE schedules
 (
     id               UUID PRIMARY KEY,
@@ -98,7 +94,6 @@ CREATE TABLE schedules
     deleted_by       UUID
 );
 
--- 6. refresh_tokens 테이블 (JWT 연동용)
 CREATE TABLE refresh_tokens
 (
     id         BIGSERIAL PRIMARY KEY,
@@ -107,3 +102,9 @@ CREATE TABLE refresh_tokens
     expires_at TIMESTAMP NOT NULL,
     created_at TIMESTAMP NOT NULL
 );
+
+CREATE INDEX idx_team_members_user_id ON team_members (user_id);
+CREATE INDEX idx_schedules_user_id ON schedules (user_id);
+CREATE INDEX idx_schedules_category_id ON schedules (category_id);
+CREATE INDEX idx_schedules_team_id ON schedules (team_id);
+CREATE INDEX idx_refresh_tokens_user_id ON refresh_tokens (user_id);

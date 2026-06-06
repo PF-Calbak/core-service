@@ -18,13 +18,11 @@ spring:
                         client-id: ${GOOGLE_CLIENT_ID}
                         client-secret: ${GOOGLE_CLIENT_SECRET}
                         scope: profile, email
-    flyway:
-        baseline-on-migrate: true
 
 jwt:
     secret: ${JWT_SECRET}
-    access-token-expiry: 1800000    # 30? (???)
-    refresh-token-expiry: 1209600000 # 14? (???)
+    access-token-expiry: 1800000    # 30?
+    refresh-token-expiry: 1209600000 # 14?
 
 gemini:
     api:
