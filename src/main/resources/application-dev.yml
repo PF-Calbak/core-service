@@ -3,7 +3,7 @@ spring:
         password: calbak_password
     jpa:
         hibernate:
-            ddl-auto: update        # 개발 환경에서만 테이블 자동 업데이트 허용
+            ddl-auto: validate       # Flyway가 스키마 관리, Hibernate는 검증만
         show-sql: true            # 개발 환경에서만 SQL 로그 노출 허용
         properties:
             hibernate:
