@@ -38,4 +38,4 @@
 
 ## 📋 CodeRabbit 요약
 
-`@coderabbitai` summary
+@coderabbitai summary
