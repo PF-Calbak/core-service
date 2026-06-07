@@ -3,22 +3,23 @@
 # ===================================================================
 
 # 구글 로그인 후 브라우저 개발자도구 → Application → Cookies에서 access_token 값을 복사
-@auth_token = eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJ0ZW50ZW4yMDI2b3BlbmFpMDMwNEBnbWFpbC5jb20iLCJpYXQiOjE3ODA3NjI5MTMsImV4cCI6MTc4MDc2NDcxM30.vv3OFN7StP8WXHolkJsbPncPkxaZqchegQDljMEoDPZtBJB4zrolg5OHaI4Ju3Q6
+@auth_token = <SET_ME_AT_RUNTIME_tenten>
 
 # 일정을 저장할 카테고리의 UUID (DB에서 확인)
 @category_id = 3ea658f9-b600-4a7b-b8bd-7e5c8722ed33
 
 
-### 1-A. Gemini AI 일정 파싱 (텍스트만)
+###1-A. Gemini AI 일정 파싱 (텍스트만 - 콤마로 여러 개 입력 테스트)
 POST http://localhost:8080/api/schedules/parse
 Content-Type: multipart/form-data; boundary=WebAppBoundary
-Cookie: access_token={{auth_token}}
+Authorization: Bearer {{auth_token}}
 
 --WebAppBoundary
 Content-Disposition: form-data; name="text"
 
-이번 주 금요일 오후 3시부터 5시까지 강남역에서 멋사 플젝 회의
+이번 주 금요일 오후 3시 강남역 회의, 토요일 오전 10시 홍대 카공, 일요일 오후 4시부터 8시까지 중앙이랑 같이 학교 도서관 플젝 회의
 --WebAppBoundary--
+
 
 
 ### 1-B. Gemini AI 일정 파싱 (이미지 1장 + 텍스트)

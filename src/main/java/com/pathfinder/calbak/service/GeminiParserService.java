@@ -1,5 +1,6 @@
 package com.pathfinder.calbak.service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -35,9 +36,9 @@ public class GeminiParserService {
     private String geminiApiKey;
 
     /**
-     * 텍스트와 이미지를 Gemini API로 전송하여 일정 데이터를 파싱 - 텍스트만, 이미지만(1장 이상), 또는 둘 다 처리 가능
+     * 텍스트와 이미지를 Gemini API로 전송하여 일정 데이터를 파싱 (다중 일정 배열 반환)
      */
-    public ParsedResponse parseSchedule(String rawText, List<MultipartFile> images) {
+    public List<ParsedResponse> parseSchedule(String rawText, List<MultipartFile> images) {
         ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
 
         // 오늘 날짜를 프롬프트에 포함: "이번 주 금요일", "다음 달" 같은 상대 표현 해석에 필요
@@ -50,24 +51,27 @@ public class GeminiParserService {
             단, 이미지가 채팅, 메신저, 문자, 카카오톡, 디스코드, 슬랙 등의 화면인 경우, 메시지 전송 시각, 읽음 표시, 프로필 정보, 상태바 시간 등은 일정 정보로 간주하지 마.
             실제 일정을 설명하는 메시지 내용에 포함된 날짜, 시간, 장소만 추출해.
             여러 이미지가 있다면 모든 이미지의 내용을 종합하여 하나의 일정으로 파싱해.
+            단, 콤마 등으로 여러 개의 일정이 나열되어 있다면 반드시 배열 형태로 모두 추출해.
             "이번 주", "다음 주", "오늘", "내일" 같은 상대적 날짜 표현은 오늘 날짜를 기준으로 계산해.
-            부가적인 설명 없이 오직 JSON만 반환해.
+            부가적인 설명 없이 오직 JSON 배열만 반환해.
             - startDate, endDate 형식: YYYY-MM-DD
             - startTime, endTime 형식: HH:mm:ss (시간이 없으면 null)
             - isAllDay: 시간이 없으면 true, 있으면 false
             - endDate: 종료일이 명시되지 않은 단일 일정이면 startDate와 동일한 값으로 설정
             - endTime: 종료 시간이 없으면 null
             
-            {
-              "title": "일정 제목",
-              "content": "추가 메모 (없으면 null)",
-              "location": "장소 (없으면 null)",
-              "startDate": "YYYY-MM-DD",
-              "startTime": "HH:mm:ss",
-              "endDate": "YYYY-MM-DD",
-              "endTime": "HH:mm:ss",
-              "isAllDay": true/false
-            }
+            [
+              {
+                "title": "일정 제목",
+                "content": "추가 메모 (없으면 null)",
+                "location": "장소 (없으면 null)",
+                "startDate": "YYYY-MM-DD",
+                "startTime": "HH:mm:ss",
+                "endDate": "YYYY-MM-DD",
+                "endTime": "HH:mm:ss",
+                "isAllDay": true/false
+              }
+            ]
             """.formatted(today);
 
         List<Map<String, Object>> parts = new ArrayList<>();
@@ -114,22 +118,30 @@ public class GeminiParserService {
         HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(requestBody, headers);
 
         String requestUrl = geminiApiUrl + "?key=" + geminiApiKey;
+
         try {
             ResponseEntity<String> response = restTemplate.postForEntity(requestUrl, requestEntity, String.class);
 
             JsonNode rootNode = objectMapper.readTree(response.getBody());
             JsonNode candidates = rootNode.path("candidates");
 
-            if (candidates.isMissingNode() || candidates.isEmpty() || candidates.get(0) == null) {
+            if (candidates.isMissingNode() || !candidates.isArray() || candidates.isEmpty()) {
                 throw new RuntimeException("Gemini API 응답에서 일정 데이터를 찾을 수 없습니다.");
             }
 
-            String responseText = candidates.get(0)
+            JsonNode partsNode = candidates.get(0)
                 .path("content")
-                .path("parts")
-                .get(0)
-                .path("text")
-                .asText();
+                .path("parts");
+            if (partsNode.isMissingNode() || !partsNode.isArray() || partsNode.isEmpty()) {
+                throw new RuntimeException("Gemini API 응답 구조가 올바르지 않습니다.");
+            }
+
+            JsonNode textNode = partsNode.get(0).path("text");
+            if (textNode.isMissingNode() || textNode.asText().isBlank()) {
+                throw new RuntimeException("Gemini API 텍스트 응답이 비어있습니다.");
+            }
+
+            String responseText = textNode.asText();
 
             // Gemini가 ```json ... ``` 마크다운 블록으로 감싸서 반환하는 경우 제거
             String cleanJson = responseText
@@ -137,28 +149,36 @@ public class GeminiParserService {
                 .replaceAll("(?s)```\\s*", "")
                 .trim();
 
-            ParsedResponse parsed = objectMapper.readValue(cleanJson, ParsedResponse.class);
+            List<ParsedResponse> parsedList = objectMapper.readValue(cleanJson,
+                new TypeReference<List<ParsedResponse>>() {
+                });
+            List<ParsedResponse> fallbackList = new ArrayList<>();
 
-            // 안전망: Gemini가 프롬프트를 무시하고 endDate를 null로 반환한 경우 startDate로 대체
-            if (parsed.endDate() == null && parsed.startDate() != null) {
-                parsed = new ParsedResponse(
-                    parsed.title(),
-                    parsed.content(),
-                    parsed.location(),
-                    parsed.startDate(),
-                    parsed.startTime(),
-                    parsed.startDate(), // endDate = startDate
-                    parsed.endTime(),
-                    parsed.isAllDay()
-                );
+            // endDate 누락 시 startDate로 강제 Fallback 처리
+            for (ParsedResponse parsed : parsedList) {
+                if (parsed.endDate() == null && parsed.startDate() != null) {
+                    parsed = new ParsedResponse(
+                        parsed.title(),
+                        parsed.content(),
+                        parsed.location(),
+                        parsed.startDate(),
+                        parsed.startTime(),
+                        parsed.startDate(), // endDate fallback
+                        parsed.endTime(),
+                        parsed.isAllDay()
+                    );
+                }
+                fallbackList.add(parsed);
             }
 
-            return parsed;
+            return fallbackList;
 
         } catch (HttpClientErrorException e) {
-            log.error("Gemini API 4xx 오류");
-            log.error("상태코드: {}", e.getStatusCode());
-            log.error("응답본문: {}", e.getResponseBodyAsString());
+            String rawBody = e.getResponseBodyAsString();
+            String sanitizedBody = rawBody.length() > 150 ? rawBody.substring(0, 150) + "...[REDACTED]" : rawBody;
+
+            log.error("Gemini API 4xx 오류 - 상태코드: {}", e.getStatusCode());
+            log.error("응답본문 요약: {}", sanitizedBody);
 
             throw new RuntimeException("일정 데이터를 분석하는데 실패했습니다.");
         } catch (RuntimeException e) {
