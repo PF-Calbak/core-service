@@ -62,7 +62,8 @@ jobs:
                     key: ${{ secrets.EC2_SSH_KEY }}
                     envs: DOCKERHUB_USERNAME,DB_URL,DB_USERNAME,DB_PASSWORD,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,JWT_SECRET,GEMINI_API_KEY,FRONTEND_URL
                     script: |
-                        cd ~/calbak
+                        set -Eeuo pipefail
+                        cd ~/calbak || exit 1
                         trap 'rm -f ~/calbak/.env' EXIT INT TERM
                         umask 077
                         : > .env
