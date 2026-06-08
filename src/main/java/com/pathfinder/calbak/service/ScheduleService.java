@@ -7,6 +7,7 @@ import com.pathfinder.calbak.domain.entity.User;
 import com.pathfinder.calbak.domain.enums.Enums.RepeatPattern;
 import com.pathfinder.calbak.domain.enums.Enums.ScheduleStatus;
 import com.pathfinder.calbak.dto.ScheduleRecords.CreateRequest;
+import com.pathfinder.calbak.dto.ScheduleRecords.ParsedResponse;
 import com.pathfinder.calbak.dto.ScheduleRecords.ScheduleResponse;
 import com.pathfinder.calbak.repository.CategoryRepository;
 import com.pathfinder.calbak.repository.ScheduleRepository;
@@ -82,8 +83,20 @@ public class ScheduleService {
         List<Schedule> schedulesToSave = new ArrayList<>();
 
         LocalDate currentDate = request.startDate();
-        // 종료일이 안 적혀있으면 시작일과 동일하게 맞춤 -> 무한루프 없이 단 1건만 생성 후 종료됨!
-        LocalDate repeatEnd = request.repeatEndDate() != null ? request.repeatEndDate() : request.startDate();
+
+        // 반복 종료일이 시작일보다 빠른 경우 명시적 에러 처리
+        LocalDate repeatEnd;
+        if (request.repeatEndDate() != null) {
+            if (request.repeatEndDate().isBefore(request.startDate())) {
+                throw new IllegalArgumentException(
+                    "반복 종료일(" + request.repeatEndDate() + ")은 시작일(" + request.startDate() + ")보다 빠를 수 없습니다.");
+            }
+            repeatEnd = request.repeatEndDate();
+        } else {
+            // 종료일이 안 적혀있으면 시작일과 동일하게 맞춤 -> 무한루프 없이 단 1건만 생성 후 종료됨!
+            repeatEnd = request.startDate();
+        }
+
         long daysBetween = ChronoUnit.DAYS.between(request.startDate(), request.endDate());
 
         if (request.repeatPattern() == null || request.repeatPattern() == RepeatPattern.NONE) {
@@ -110,6 +123,33 @@ public class ScheduleService {
 
         List<Schedule> savedSchedules = scheduleRepository.saveAll(schedulesToSave);
         return savedSchedules.stream().map(ScheduleResponse::from).collect(Collectors.toList());
+    }
+
+    // Gemini 파싱 결과를 단일 트랜잭션 안에서 원자적으로 일괄 저장
+    // parse-and-create 엔드포인트에서 호출 (부분 커밋 방지)
+    @Transactional
+    public List<ScheduleResponse> createSchedulesBatch(String email, UUID categoryId,
+                                                       List<ParsedResponse> parsedList) {
+        List<ScheduleResponse> results = new ArrayList<>();
+        for (ParsedResponse parsed : parsedList) {
+            CreateRequest createRequest = new CreateRequest(
+                categoryId,
+                null,                    // teamId: 일단 파싱 결과에는 팀 정보 없음
+                parsed.title(),
+                parsed.content(),
+                parsed.location(),
+                parsed.startDate(),
+                parsed.startTime(),
+                parsed.endDate(),
+                parsed.endTime(),
+                parsed.isAllDay(),
+                parsed.repeatPattern(),  // Gemini가 파싱한 반복 패턴 그대로 사용
+                parsed.repeatEndDate(),  // Gemini가 파싱한 반복 종료일 그대로 사용
+                30                       // 기본 알림 시간 30분
+            );
+            results.addAll(createSchedule(email, createRequest));
+        }
+        return results;
     }
 
     // 보정된 시간을 받도록 파라미터 추가
@@ -170,7 +210,6 @@ public class ScheduleService {
         scheduleRepository.saveAndFlush(schedule);
     }
 
-
     // 명시적 완료 로직
     @Transactional
     public void completeSchedule(UUID scheduleId, String email) {
@@ -205,7 +244,6 @@ public class ScheduleService {
         scheduleRepository.saveAndFlush(schedule); // 명시적 저장 및 플러시 강제
     }
 
-
     public List<ScheduleResponse> getDailyTimetable(String email, LocalDate date) {
         User user = userRepository.findByEmail(email)
             .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
@@ -227,11 +265,26 @@ public class ScheduleService {
         }
 
         for (ScheduleResponse schedule : dailySchedules) {
-            int startHour = (schedule.isAllDay() || schedule.startTime() == null) ? 0 : schedule.startTime().getHour();
-            int endHour = (schedule.isAllDay() || schedule.endTime() == null) ? 23 : schedule.endTime().getHour();
+            int startHour = (schedule.isAllDay() || schedule.startTime() == null) ? 0
+                : schedule.startTime().getHour();
+            int endHour = (schedule.isAllDay() || schedule.endTime() == null) ? 23
+                : schedule.endTime().getHour();
 
-            for (int h = startHour; h <= endHour; h++) {
-                timeTableMap.get(h).add(schedule);
+            // 자정을 넘기는 일정 처리
+            // 예: 23시 시작 → 1시 종료인 경우 startHour > endHour
+            if (startHour <= endHour) {
+                // 일반 케이스: 같은 날 안에 끝나는 일정
+                for (int h = startHour; h <= endHour; h++) {
+                    timeTableMap.get(h).add(schedule);
+                }
+            } else {
+                // 자정을 넘기는 일정: startHour..23 구간과 0..endHour 구간으로 분리
+                for (int h = startHour; h < 24; h++) {
+                    timeTableMap.get(h).add(schedule);
+                }
+                for (int h = 0; h <= endHour; h++) {
+                    timeTableMap.get(h).add(schedule);
+                }
             }
         }
 

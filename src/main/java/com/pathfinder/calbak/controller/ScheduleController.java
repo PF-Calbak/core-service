@@ -11,12 +11,13 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import java.time.LocalDate;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -34,6 +35,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
+@Slf4j
 @Validated
 @RestController
 @RequestMapping("/api/schedules")
@@ -78,7 +80,8 @@ public class ScheduleController {
     }
 
     // 텍스트/이미지 파싱 + 자동 일정 등록 통합 API
-    @PostMapping("/parse-and-create")
+    // 모든 일정이 하나의 트랜잭션 안에서 저장되므로 중간 실패 시 전체 롤백 보장
+    @PostMapping(value = "/parse-and-create", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<List<ScheduleResponse>> parseAndCreate(
         Authentication authentication,
         @RequestParam(required = false) String text,
@@ -86,33 +89,20 @@ public class ScheduleController {
 
         String email = authentication.getName();
 
+        // /parse 엔드포인트와 동일한 빈 입력 검증
+        if ((text == null || text.isBlank()) && (images == null || images.isEmpty())) {
+            throw new IllegalArgumentException("텍스트나 이미지 중 하나는 반드시 입력해야 합니다.");
+        }
+
         // 1. 파싱
         List<ParsedResponse> parsedList = geminiParserService.parseSchedule(text, images);
 
-        // 2. 일단 유저의 첫 번째 카테고리 자동 조회 (서비스 레이어에서 가져온 객체 사용)
+        // 2. 일단 유저의 첫 번째 카테고리 조회
         Category firstCategory = categoryService.getFirstCategory(email);
 
-        List<ScheduleResponse> results = new ArrayList<>();
-
-        // 3. 파싱 결과를 CreateRequest로 변환 및 등록
-        for (ParsedResponse parsed : parsedList) {
-            CreateRequest createRequest = new CreateRequest(
-                firstCategory.getId(),
-                null, // teamId
-                parsed.title(),
-                parsed.content(),
-                parsed.location(),
-                parsed.startDate(),
-                parsed.startTime(),
-                parsed.endDate(),
-                parsed.endTime(),
-                parsed.isAllDay(),
-                parsed.repeatPattern(),
-                parsed.repeatEndDate(),
-                30 // 기본 알림 시간
-            );
-            results.addAll(scheduleService.createSchedule(email, createRequest));
-        }
+        // 3. 파싱 결과를 원자적으로 일괄 저장 (서비스 레이어의 단일 트랜잭션으로 처리)
+        List<ScheduleResponse> results =
+            scheduleService.createSchedulesBatch(email, firstCategory.getId(), parsedList);
 
         return ResponseEntity.ok(results);
     }
@@ -178,14 +168,11 @@ public class ScheduleController {
         return ResponseEntity.status(e.getStatusCode()).body(e.getReason());
     }
 
-    // Enum 변환 에러 및 JPA Transaction 에러 원인 출력
+    // 예상치 못한 서버 에러는 로그로만 기록하고 내부 정보는 클라이언트에 노출하지 않음
     @ExceptionHandler(Exception.class)
     public ResponseEntity<String> handleException(Exception e) {
-        Throwable rootCause = e;
-        while (rootCause.getCause() != null && rootCause != rootCause.getCause()) {
-            rootCause = rootCause.getCause();
-        }
-        return ResponseEntity.badRequest()
-            .body("서버 처리 중 에러가 발생했습니다: " + e.getMessage() + "\n[상세 원인]: " + rootCause.getMessage());
+        log.error("서버 처리 중 예상치 못한 오류 발생", e);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+            .body("서버 처리 중 오류가 발생했습니다.");
     }
 }

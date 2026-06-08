@@ -69,7 +69,7 @@ Authorization: Bearer {{auth_token}}
 --WebAppBoundary
 Content-Disposition: form-data; name="text"
 
-이번 주 금요일부터 매주 금요일 오후 3시부터 5시까지 카페 알바. 7월 10일까지.
+이번 주 화요일부터 매주 화요일 오후 10시부터 11시까지 백엔드 운영진 회의. 7월 28일까지.
 --WebAppBoundary--
 
 # 이번 주 금요일 오후 11시부터 11시 반까지 상도역 회의
@@ -93,13 +93,17 @@ Cookie: access_token={{auth_token}}
   "reminderMinutes": 30
 }
 
+> {%
+    client.global.set("schedule_id", response.body[0].id);
+%}
+
 
 ### 4. 상태 변경 - 완료 요청
-PATCH http://localhost:8080/api/schedules/f138b057-7cc8-4447-b1fc-340501aecb6f/complete
+PATCH http://localhost:8080/api/schedules/{{schedule_id}}/complete
 Authorization: Bearer {{auth_token}}
 
 ### 5. 상태 변경 - 삭제 요청
-PATCH http://localhost:8080/api/schedules/f138b057-7cc8-4447-b1fc-340501aecb6f/delete
+PATCH http://localhost:8080/api/schedules/{{schedule_id}}/delete
 Authorization: Bearer {{auth_token}}
 
 ### 6. 일간 타임테이블 조회

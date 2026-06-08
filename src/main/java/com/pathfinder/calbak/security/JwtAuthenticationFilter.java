@@ -1,6 +1,5 @@
 package com.pathfinder.calbak.security;
 
-import com.pathfinder.calbak.domain.entity.User;
 import com.pathfinder.calbak.repository.UserRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -11,6 +10,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -42,11 +42,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (isValid) {
             String email = jwtProvider.getEmailFromToken(token);
 
-            // 필터 단계에서 DB를 조회해 UUID를 가져옴 -> AuditorAware에서 DB 조회 불필요 (트랜잭션 flush 중 DB 쿼리 문제 방지)
-            Optional<User> userOptional = userRepository.findByEmail(email);
-            if (userOptional.isPresent()) {
+            // User 전체 엔티티 대신 UUID만 조회하는 경량 프로젝션 사용
+            // -> AuditorAware에서 DB 조회 불필요 (트랜잭션 flush 중 DB 쿼리 문제 방지)
+            Optional<UUID> userIdOptional = userRepository.findIdByEmail(email);
+            if (userIdOptional.isPresent()) {
                 AuthenticatedUser authenticatedUser =
-                    new AuthenticatedUser(userOptional.get().getId(), email);
+                    new AuthenticatedUser(userIdOptional.get(), email);
 
                 UsernamePasswordAuthenticationToken authentication =
                     new UsernamePasswordAuthenticationToken(
