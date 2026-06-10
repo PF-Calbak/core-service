@@ -3,7 +3,7 @@
 
 ### 온보딩 추가 정보 입력 API 테스트
 ### 사전 조건: 구글 로그인 완료 후 access_token 쿠키가 발급된 상태
-PATCH {{base_url}}}/api/users/additional-info
+PATCH {{base_url}}/api/users/additional-info
 Content-Type: application/json
 Authorization: Bearer {{auth_token}}
 
