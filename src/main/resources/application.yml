@@ -33,8 +33,7 @@ app:
     frontend:
         url: ${FRONTEND_URL:http://localhost:3000}
     cookie:
-        secure: true
-        same-site: None
-
+        secure: ${COOKIE_SECURE:false}
+        same-site: ${COOKIE_SAME_SITE:Lax}
 server:
     forward-headers-strategy: framework
