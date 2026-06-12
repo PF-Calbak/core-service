@@ -258,4 +258,18 @@ class ScheduleServiceTest {
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessage("여러 일정이 감지되었습니다. 하나의 일정만 입력하세요.");
     }
+
+    @Test
+    @DisplayName("AI 수정 시 파싱 결과가 0건이면 예외가 발생한다")
+    void parseAndUpdateSchedule_Fail_NoResults() {
+        String email = "test@test.com";
+        UUID scheduleId = UUID.randomUUID();
+
+        given(geminiParserService.parseSchedule(anyString(), any())).willReturn(List.of());
+
+        assertThatThrownBy(
+            () -> scheduleService.parseAndUpdateSchedule(scheduleId, email, "AI 수정요청", (List<MultipartFile>) null))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("분석된 일정이 없습니다."); // 서비스 코드와 동일하게 검증
+    }
 }
