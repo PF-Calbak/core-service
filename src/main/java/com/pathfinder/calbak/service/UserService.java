@@ -77,11 +77,21 @@ public class UserService {
     }
 
     // 중복되는 DB Unique 제약 예외 처리 로직 공통화
+    // 'nickname' 관련 에러인지 메시지를 파싱하여 검사
     private void flushAndCatchDuplicate() {
         try {
             userRepository.flush();
         } catch (DataIntegrityViolationException e) {
-            throw new DuplicateNicknameException();
+            String message = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
+            Throwable rootCause = e.getRootCause();
+            String rootMessage = (rootCause != null && rootCause.getMessage() != null)
+                ? rootCause.getMessage().toLowerCase() : "";
+
+            if (message.contains("nickname") || rootMessage.contains("nickname")) {
+                throw new DuplicateNicknameException();
+            }
+
+            throw e; // 닉네임 에러가 아니면 원래 에러를 그대로 던짐
         }
     }
 }

@@ -251,6 +251,7 @@ class UserServiceTest {
     }
 
     // 단건 수정 중 동시성 이슈 발생 검증
+    // 가짜 에러 객체 생성 시 'nickname' 이라는 단어를 포함하도록 수정
     @Test
     @DisplayName("닉네임 단건 수정 시 동시성 이슈로 DB Unique 제약조건이 발생하면 DuplicateNicknameException을 던진다")
     void updateNickname_ConcurrentDuplicate() {
@@ -261,7 +262,9 @@ class UserServiceTest {
         given(userRepository.existsByNickname("동시성닉네임")).willReturn(false); // pre-check는 통과 (동시 접근 상황)
 
         // flush 시점에 DB Unique Constraint 예외 발생 시뮬레이션
-        doThrow(DataIntegrityViolationException.class).when(userRepository).flush();
+        doThrow(
+            new DataIntegrityViolationException("duplicate key value violates unique constraint 'uk_user_nickname'"))
+            .when(userRepository).flush();
 
         assertThatThrownBy(() -> userService.updateNickname(request))
             .isInstanceOf(DuplicateNicknameException.class)
@@ -269,6 +272,7 @@ class UserServiceTest {
     }
 
     // 온보딩 중 동시성 이슈 발생 검증
+    // 가짜 에러 객체 생성 시 'nickname' 이라는 단어를 포함하도록 수정
     @Test
     @DisplayName("온보딩 추가 정보 입력 시 동시성 이슈로 DB Unique 제약조건이 발생하면 DuplicateNicknameException을 던진다")
     void updateAdditionalInfo_ConcurrentDuplicate() {
@@ -282,7 +286,9 @@ class UserServiceTest {
         given(userRepository.existsByNickname("동시성닉네임")).willReturn(false); // pre-check 통과
 
         // flush 시점에 예외 발생 시뮬레이션
-        doThrow(DataIntegrityViolationException.class).when(userRepository).flush();
+        doThrow(
+            new DataIntegrityViolationException("duplicate key value violates unique constraint 'uk_user_nickname'"))
+            .when(userRepository).flush();
 
         assertThatThrownBy(() -> userService.updateAdditionalInfo(request))
             .isInstanceOf(DuplicateNicknameException.class)
