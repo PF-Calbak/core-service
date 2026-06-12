@@ -1,5 +1,6 @@
 package com.pathfinder.calbak.controller;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -12,6 +13,7 @@ import com.pathfinder.calbak.domain.enums.Enums;
 import com.pathfinder.calbak.domain.enums.Enums.NotificationStatus;
 import com.pathfinder.calbak.dto.UserAdditionalInfoRequest;
 import com.pathfinder.calbak.dto.UserNicknameUpdateRequest;
+import com.pathfinder.calbak.exception.DuplicateNicknameException;
 import com.pathfinder.calbak.repository.UserRepository;
 import com.pathfinder.calbak.security.JwtProvider;
 import com.pathfinder.calbak.service.UserService;
@@ -88,7 +90,7 @@ class UserControllerTest {
     void updateNickname_Success() throws Exception {
         // given: 들어올 요청 데이터 세팅
         UserNicknameUpdateRequest request = new UserNicknameUpdateRequest("슈퍼개발자");
-        
+
         User mockUser = User.builder()
             .email("test@google.com")
             .nickname("기존닉네임")
@@ -106,5 +108,38 @@ class UserControllerTest {
                 .content(objectMapper.writeValueAsString(request)))
             .andExpect(status().isOk())
             .andExpect(content().string("닉네임이 성공적으로 변경되었습니다."));
+    }
+
+    // 중복 닉네임 요청 시 커스텀 예외(DuplicateNicknameException)가 발생하는지 검증
+    @Test
+    @WithMockUser(username = "test@google.com")
+    @DisplayName("이미 존재하는 닉네임으로 변경 시 DuplicateNicknameException 예외가 발생한다.")
+    void updateNickname_DuplicateNickname() throws Exception {
+        UserNicknameUpdateRequest request = new UserNicknameUpdateRequest("중복닉네임");
+        User mockUser = User.builder().email("test@google.com").nickname("기존닉네임").build();
+
+        given(userRepository.findByEmail("test@google.com")).willReturn(Optional.of(mockUser));
+        given(userRepository.existsByNickname(request.nickname())).willReturn(true); // 중복!
+
+        mockMvc.perform(patch("/api/users/nickname")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+            .andExpect(
+                result -> assertThat(result.getResolvedException()).isInstanceOf(DuplicateNicknameException.class));
+    }
+
+    // 닉네임 길이 제한/공백 등 @Valid 실패 시 400 Bad Request 검증
+    @Test
+    @WithMockUser(username = "test@google.com")
+    @DisplayName("빈 닉네임을 전송하면 @Valid 검증에 실패하여 400 Bad Request를 반환한다.")
+    void updateNickname_BlankNickname() throws Exception {
+        UserNicknameUpdateRequest request = new UserNicknameUpdateRequest(" "); // 빈 값
+
+        mockMvc.perform(patch("/api/users/nickname")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isBadRequest());
     }
 }

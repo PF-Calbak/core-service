@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -24,6 +25,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 
@@ -246,5 +248,44 @@ class UserServiceTest {
         assertThatThrownBy(() -> userService.updateNickname(request))
             .isInstanceOf(UserNotFoundException.class)
             .hasMessage("존재하지 않는 유저입니다.");
+    }
+
+    // 단건 수정 중 동시성 이슈 발생 검증
+    @Test
+    @DisplayName("닉네임 단건 수정 시 동시성 이슈로 DB Unique 제약조건이 발생하면 DuplicateNicknameException을 던진다")
+    void updateNickname_ConcurrentDuplicate() {
+        User user = User.builder().email("test@test.com").nickname("기존닉네임").build();
+        UserNicknameUpdateRequest request = new UserNicknameUpdateRequest("동시성닉네임");
+
+        given(userRepository.findByEmail("test@test.com")).willReturn(Optional.of(user));
+        given(userRepository.existsByNickname("동시성닉네임")).willReturn(false); // pre-check는 통과 (동시 접근 상황)
+
+        // flush 시점에 DB Unique Constraint 예외 발생 시뮬레이션
+        doThrow(DataIntegrityViolationException.class).when(userRepository).flush();
+
+        assertThatThrownBy(() -> userService.updateNickname(request))
+            .isInstanceOf(DuplicateNicknameException.class)
+            .hasMessage("이미 사용 중인 닉네임입니다.");
+    }
+
+    // 온보딩 중 동시성 이슈 발생 검증
+    @Test
+    @DisplayName("온보딩 추가 정보 입력 시 동시성 이슈로 DB Unique 제약조건이 발생하면 DuplicateNicknameException을 던진다")
+    void updateAdditionalInfo_ConcurrentDuplicate() {
+        User user = User.builder().email("test@test.com").nickname("기존닉네임").build();
+        UserAdditionalInfoRequest request = new UserAdditionalInfoRequest(
+            "동시성닉네임", Enums.Gender.MALE, Enums.AgeGroup.AGE_20S,
+            null, null, null, null, NotificationStatus.NO
+        );
+
+        given(userRepository.findByEmail("test@test.com")).willReturn(Optional.of(user));
+        given(userRepository.existsByNickname("동시성닉네임")).willReturn(false); // pre-check 통과
+
+        // flush 시점에 예외 발생 시뮬레이션
+        doThrow(DataIntegrityViolationException.class).when(userRepository).flush();
+
+        assertThatThrownBy(() -> userService.updateAdditionalInfo(request))
+            .isInstanceOf(DuplicateNicknameException.class)
+            .hasMessage("이미 사용 중인 닉네임입니다.");
     }
 }

@@ -7,6 +7,7 @@ import com.pathfinder.calbak.exception.DuplicateNicknameException;
 import com.pathfinder.calbak.exception.UserNotFoundException;
 import com.pathfinder.calbak.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,6 +45,13 @@ public class UserService {
             request.wakeUpTime(),
             request.notificationStatus()
         );
+
+        // 동시에 같은 닉네임으로 저장될 때 발생하는 DB Unique 제약 에러 방어
+        try {
+            userRepository.flush();
+        } catch (DataIntegrityViolationException e) {
+            throw new DuplicateNicknameException();
+        }
     }
 
     @Transactional
@@ -67,5 +75,12 @@ public class UserService {
 
         // 4. 닉네임 업데이트 (Dirty Checking으로 인해 자동 UPDATE 쿼리 발생)
         user.updateNickname(newNickname);
+
+        // 동시에 같은 닉네임으로 저장될 때 발생하는 DB Unique 제약 에러 방어
+        try {
+            userRepository.flush();
+        } catch (DataIntegrityViolationException e) {
+            throw new DuplicateNicknameException();
+        }
     }
 }
